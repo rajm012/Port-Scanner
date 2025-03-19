@@ -59,16 +59,30 @@ def scan_udp_port(target_ip, port, progress_callback):
     """Scan a single UDP port."""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(3)
+        sock.settimeout(10)  # Increase timeout for UDP
         sock.sendto(b"\x00", (target_ip, port))  # Send empty UDP packet
 
         try:
             data, _ = sock.recvfrom(1024)
             progress_callback(port, "Open", "UDP Response Received")
         except socket.timeout:
-            progress_callback(port, "Filtered", "No Response")
+
+            sock.sendto(b"\x00", (target_ip, port))
+            try:
+                data, _ = sock.recvfrom(1024)
+                progress_callback(port, "Open", "UDP Response Received")
+
+            except socket.timeout:
+                progress_callback(port, "Filtered", "No Response")
+
     except Exception as e:
-        progress_callback(port, "Error", str(e))
+        # Provide a user-friendly error message
+        if "10054" in str(e):
+            progress_callback(port, "Error", "Connection forcibly closed by remote host")
+
+        else:
+            progress_callback(port, "Error", str(e))
+
     finally:
         sock.close()
 

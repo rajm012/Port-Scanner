@@ -51,8 +51,13 @@ def scan_ports_gui(target_ip, port_range, scan_type):
         if not scanning:
             return
         tag = "open" if status == "Open" else "closed"
+
+        if "Error" in status or "Filtered" in status:
+            tag = "error" if "Error" in status else "filtered"
+
         result_list.insert("", "end", values=(port, status, service), tags=(tag,))
         progress += progress_step
+        
         update_progress(progress)
 
     # Call scanner function
@@ -62,7 +67,9 @@ def scan_ports_gui(target_ip, port_range, scan_type):
     if scanning:
         progress_bar["value"] = 100
         status_label.config(text=f"Scan completed for {target_ip} ({scan_type.upper()})")
+
     scanning = False
+
 
 # Function to save results
 def save_results():
@@ -149,6 +156,8 @@ result_list.heading("Service", text="Service")
 # Add tags for color-coding
 result_list.tag_configure("open", background="light green")
 result_list.tag_configure("closed", background="white")
+result_list.tag_configure("error", background="light coral")  # Red for errors
+result_list.tag_configure("filtered", background="light yellow")  # Yellow for filtered
 
 result_list.grid(row=0, column=0, sticky="nsew")
 
