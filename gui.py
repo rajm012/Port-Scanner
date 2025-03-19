@@ -1,16 +1,30 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from scanner import scan_ports
+import threading
+
+def update_progress(port, status):
+    """Updates the UI with scan results."""
+    if status == "Open":
+        result_list.insert("", "end", values=(port, status))
 
 def start_scan():
+    """Starts the scanning process in a new thread."""
     target_ip = ip_entry.get()
-    port_range = range(int(start_port.get()), int(end_port.get()) + 1)
+    try:
+        start = int(start_port.get())
+        end = int(end_port.get())
+        port_range = range(start, end + 1)
+    except ValueError:
+        messagebox.showerror("Error", "Invalid port numbers. Please enter valid integers.")
+        return
     
-    result_list.delete(*result_list.get_children())  # Clear previous results
-    results = scan_ports(target_ip, port_range)
-    
-    for port, status in results:
-        result_list.insert("", "end", values=(port, status))
+    # Clear previous results
+    result_list.delete(*result_list.get_children())
+
+    # Run scan in a new thread to prevent UI freezing
+    scan_thread = threading.Thread(target=scan_ports, args=(target_ip, port_range, update_progress))
+    scan_thread.start()
 
 # GUI Setup
 root = tk.Tk()
