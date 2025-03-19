@@ -3,10 +3,10 @@ from tkinter import ttk, messagebox
 from scanner import scan_ports
 import threading
 
-def update_progress(port, status):
+def update_progress(port, status, service):
     """Updates the UI with scan results."""
     if status == "Open":
-        result_list.insert("", "end", values=(port, status))
+        result_list.insert("", "end", values=(port, status, service))
 
 def start_scan():
     """Starts the scanning process in a new thread."""
@@ -28,7 +28,7 @@ def start_scan():
 
 # GUI Setup
 root = tk.Tk()
-root.title("Port Scanner")
+root.title("Port Scanner with Service Detection")
 
 # Input Fields
 tk.Label(root, text="Target IP:").grid(row=0, column=0)
@@ -48,10 +48,11 @@ scan_button = tk.Button(root, text="Start Scan", command=start_scan)
 scan_button.grid(row=3, columnspan=2)
 
 # Result Table
-columns = ("Port", "Status")
+columns = ("Port", "Status", "Service")
 result_list = ttk.Treeview(root, columns=columns, show="headings")
 result_list.heading("Port", text="Port")
 result_list.heading("Status", text="Status")
+result_list.heading("Service", text="Service")
 result_list.grid(row=4, columnspan=2)
 
 root.mainloop()

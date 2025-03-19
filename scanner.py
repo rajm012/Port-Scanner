@@ -1,6 +1,17 @@
 import socket
 import threading
 
+# Common ports and their services
+COMMON_SERVICES = {
+    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP",
+    53: "DNS", 80: "HTTP", 110: "POP3", 143: "IMAP",
+    443: "HTTPS", 3306: "MySQL", 3389: "RDP"
+}
+
+def get_service(port):
+    """Returns the service name if known, otherwise 'Unknown'."""
+    return COMMON_SERVICES.get(port, "Unknown")
+
 def scan_port(target_ip, port, progress_callback):
     """Scans a single port and updates the progress callback."""
     try:
@@ -8,9 +19,10 @@ def scan_port(target_ip, port, progress_callback):
         sock.settimeout(1)
         result = sock.connect_ex((target_ip, port))
         if result == 0:  # Port is Open
+            service = get_service(port)
             sock.close()
-            progress_callback(port, "Open")  # Update only open ports
-    except Exception as e:
+            progress_callback(port, "Open", service)  # Update UI with service name
+    except Exception:
         pass  # Ignore errors
 
 def scan_ports(target_ip, port_range, progress_callback):
@@ -27,23 +39,3 @@ def scan_ports(target_ip, port_range, progress_callback):
         thread.join()
 
 
-
-# if __name__ == "__main__":
-#     target = "127.0.0.1"  # Change to test
-#     ports = range(20, 1025)
-#     results = scan_ports(target, ports, dummy_progress_callback)
-#     for port, status in results:
-#         print(f"Port {port}: {status}")
-
-
-
-# if __name__ == "__main__":
-#     target = input("Enter Target IP: ")
-#     start_port = int(input("Enter Start Port: "))
-#     end_port = int(input("Enter End Port: "))
-
-#     ports = range(start_port, end_port + 1)
-#     results = scan_ports(target, ports, progress_callback)
-
-#     for port, status in results:
-#         print(f"Port {port}: {status}")
