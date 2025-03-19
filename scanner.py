@@ -1,7 +1,12 @@
 import socket
 import threading
 import concurrent.futures
+import os
+import shodan
+import struct
 
+
+SHODAN_API_KEY="S0EA8Co1efoOunYbc1EIPOuZDZCo45Cx"
 
 # Common services mapping
 COMMON_SERVICES = {
@@ -65,6 +70,7 @@ def scan_udp_port(target_ip, port, progress_callback):
         try:
             data, _ = sock.recvfrom(1024)
             progress_callback(port, "Open", "UDP Response Received")
+
         except socket.timeout:
 
             sock.sendto(b"\x00", (target_ip, port))
@@ -100,3 +106,54 @@ def scan_ports(target_ip, port_range, progress_callback, scan_type="tcp"):
         for future in concurrent.futures.as_completed(futures):
             future.result()
 
+
+
+def shodan_lookup(ip):
+    """Query Shodan for additional information about the target IP."""
+    try:
+        api = shodan.Shodan(SHODAN_API_KEY)
+        info = api.host(ip)
+
+        result = {
+            "IP": info.get("ip_str", "Unknown"),
+            "Organization": info.get("org", "Unknown"),
+            "ISP": info.get("isp", "Unknown"),
+            "OS": info.get("os", "Unknown"),
+            "Open Ports": info.get("ports", []),
+            "Vulnerabilities": info.get("vulns", "None"),
+        }
+
+        return result
+
+    except shodan.APIError as e:
+        return {"Error": f"Shodan API Error: {e}"}
+
+
+
+def detect_os(ttl):
+    """Detect OS based on TTL value."""
+    if ttl > 128:
+        return "Windows"
+    elif 64 < ttl <= 128:
+        return "Linux/Unix"
+    elif ttl <= 64:
+        return "BSD/MacOS"
+    return "Unknown"
+
+
+
+def get_ttl(target_ip):
+    """Get the TTL value from an ICMP ping."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+        sock.settimeout(1)
+        sock.sendto(b'\x08\x00\x00\x00\x00\x00\x00\x00', (target_ip, 1))
+
+        response, _ = sock.recvfrom(1024)
+        ttl = struct.unpack("B", response[8:9])[0]
+        sock.close()
+
+        return ttl
+
+    except Exception:
+        return None

@@ -2,10 +2,25 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
 import json
-from scanner import scan_ports  # Import from scanner.py
+from scanner import scan_ports, shodan_lookup, get_ttl, detect_os
+import os
+import ctypes
+import sys
+
+SHODAN_API_KEY="S0EA8Co1efoOunYbc1EIPOuZDZCo45Cx"
+
 
 # Global variable to control scanning
 scanning = False
+scanning_lock = threading.Lock()
+
+
+def stop_scan():
+    global scanning
+    with scanning_lock:
+        scanning = False
+    status_label.config(text="Scan stopped.")
+
 
 # Function to update progress bar
 def update_progress(value):
@@ -33,11 +48,6 @@ def run_scan():
     scan_thread = threading.Thread(target=scan_ports_gui, args=(target_ip, port_range, scan_type))
     scan_thread.start()
 
-# Function to stop the scan
-def stop_scan():
-    global scanning
-    scanning = False
-    status_label.config(text="Scan stopped.")
 
 # Function to handle scanning updates
 def scan_ports_gui(target_ip, port_range, scan_type):
@@ -50,6 +60,7 @@ def scan_ports_gui(target_ip, port_range, scan_type):
         nonlocal progress
         if not scanning:
             return
+        
         tag = "open" if status == "Open" else "closed"
 
         if "Error" in status or "Filtered" in status:
@@ -64,11 +75,12 @@ def scan_ports_gui(target_ip, port_range, scan_type):
     scan_ports(target_ip, port_range, thread_callback, scan_type)
 
     # Ensure full progress when done
-    if scanning:
-        progress_bar["value"] = 100
-        status_label.config(text=f"Scan completed for {target_ip} ({scan_type.upper()})")
-
-    scanning = False
+    with scanning_lock:
+        if scanning:
+            progress_bar["value"] = 100
+            status_label.config(text=f"Scan completed for {target_ip} ({scan_type.upper()})")
+    
+        scanning = False
 
 
 # Function to save results
@@ -91,6 +103,54 @@ def save_results():
             with open(file, "w") as f:
                 for result in results:
                     f.write(f"{result['port']},{result['status']},{result['service']}\n")
+
+
+
+def run_shodan_lookup():
+    """Run Shodan lookup and display results in a pop-up."""
+    if not SHODAN_API_KEY:
+        messagebox.showerror("Error", "Shodan API key not found. Please set the SHODAN_API_KEY environment variable.")
+        return
+
+    target_ip = ip_entry.get().strip()
+    
+    if not target_ip:
+        messagebox.showerror("Error", "Please enter a target IP address.")
+        return
+
+    result = shodan_lookup(target_ip)
+
+
+    if "Error" in result:
+        messagebox.showerror("Shodan Error", result["Error"])
+
+    else:
+        info_text = f"IP: {result['IP']}\nOrganization: {result['Organization']}\n"
+        info_text += f"ISP: {result['ISP']}\nOS: {result['OS']}\n"
+        info_text += f"Open Ports: {', '.join(map(str, result['Open Ports']))}\n"
+        info_text += f"Vulnerabilities: {result['Vulnerabilities']}\n"
+        
+        messagebox.showinfo("Shodan Lookup", info_text)
+
+
+def run_os_detection():
+    target_ip = ip_entry.get().strip()
+    if not target_ip:
+        messagebox.showerror("Error", "Please enter a target IP address.")
+        return
+
+    try:
+        ttl = get_ttl(target_ip)
+        if ttl is None:
+            messagebox.showwarning("OS Detection", "Could not determine OS. Ensure you have administrative privileges.")
+            return
+
+        os_guess = detect_os(ttl)
+        messagebox.showinfo("OS Detection", f"Detected OS: {os_guess} (TTL={ttl})")
+
+    except PermissionError:
+        messagebox.showerror("Error", "Administrative privileges required for OS detection.")
+
 
 # GUI Setup
 root = tk.Tk()
@@ -166,6 +226,44 @@ scrollbar = ttk.Scrollbar(result_frame, orient="vertical", command=result_list.y
 scrollbar.grid(row=0, column=1, sticky="ns")
 result_list.configure(yscrollcommand=scrollbar.set)
 
+
+# Add a button for Shodan lookup
+shodan_button = ttk.Button(button_frame, text="Shodan Lookup", command=run_shodan_lookup)
+shodan_button.grid(row=0, column=3, padx=5)
+
+# Add OS detection button
+os_button = ttk.Button(button_frame, text="Detect OS", command=run_os_detection)
+os_button.grid(row=0, column=4, padx=5)
+
+
+udp_note = ttk.Label(main_frame, text="Note: UDP scanning may be unreliable due to the nature of the protocol.", foreground="gray")
+udp_note.grid(row=9, column=0, columnspan=2, pady=5)
+
 # Run GUI
 root.mainloop()
 
+
+
+# -------------------------------------
+# ------------How to test--------------
+# 
+# For the OS test only enter the IP:
+# 
+# Target IP: 8.8.8.8 (Google DNS server):
+# Detected OS: Linux/Unix (TTL=64)
+# 
+# For 192.168.1.1 (local router):
+# Detected OS: Windows (TTL=128)
+# 
+# -----------------------------------------------------------------------------------
+# 
+# For Shodan Lookup: Enter a public IP address (e.g., 8.8.8.8) in the "Target IP" field:
+# 
+# IP: 8.8.8.8
+# Organization: Google LLC
+# ISP: Google LLC
+# OS: Unknown
+# Open Ports: 53
+# Vulnerabilities: None
+# 
+# ------------------------------------------------------------------------------------
