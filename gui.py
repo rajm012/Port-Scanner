@@ -1,44 +1,70 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 import threading
-from scanner import scan_ports
 import json
+from scanner import scan_ports  # Import from scanner.py
 
+# Global variable to control scanning
+scanning = False
+
+# Function to update progress bar
 def update_progress(value):
     progress_bar["value"] = value
     root.update_idletasks()
 
+# Function to run the scan
 def run_scan():
-    target_ip = ip_entry.get()
+    global scanning
+    scanning = True
+    target_ip = ip_entry.get().strip()
     start = int(start_port.get())
     end = int(end_port.get())
+    scan_type = scan_mode.get()  # "tcp" or "udp"
+
+    if not target_ip:
+        messagebox.showerror("Error", "Please enter a target IP address.")
+        return
+
     port_range = range(start, end + 1)
-
     result_list.delete(*result_list.get_children())  # Clear previous results
-    status_label.config(text=f"Scanning {target_ip}...")  # Show scan status
+    status_label.config(text=f"Scanning {target_ip} ({scan_type.upper()})...")
 
-    scan_thread = threading.Thread(target=scan_ports_gui, args=(target_ip, port_range))
+    # Start scanning in a separate thread
+    scan_thread = threading.Thread(target=scan_ports_gui, args=(target_ip, port_range, scan_type))
     scan_thread.start()
 
+# Function to stop the scan
+def stop_scan():
+    global scanning
+    scanning = False
+    status_label.config(text="Scan stopped.")
 
-
-def scan_ports_gui(target_ip, port_range):
+# Function to handle scanning updates
+def scan_ports_gui(target_ip, port_range, scan_type):
+    global scanning
     num_ports = len(port_range)
     progress_step = 100 / num_ports if num_ports > 0 else 100
     progress = 0
 
     def thread_callback(port, status, service):
         nonlocal progress
-        result_list.insert("", "end", values=(port, status, service))  # Add result to GUI
+        if not scanning:
+            return
+        tag = "open" if status == "Open" else "closed"
+        result_list.insert("", "end", values=(port, status, service), tags=(tag,))
         progress += progress_step
-        update_progress(progress)  # Update progress bar
+        update_progress(progress)
 
-    # Start multithreaded scanning
-    scan_ports(target_ip, port_range, thread_callback)
+    # Call scanner function
+    scan_ports(target_ip, port_range, thread_callback, scan_type)
 
-    progress_bar["value"] = 100  # Ensure full progress when done
+    # Ensure full progress when done
+    if scanning:
+        progress_bar["value"] = 100
+        status_label.config(text=f"Scan completed for {target_ip} ({scan_type.upper()})")
+    scanning = False
 
-
+# Function to save results
 def save_results():
     file = filedialog.asksaveasfilename(defaultextension=".csv",
                                         filetypes=[("CSV Files", "*.csv"),
@@ -59,47 +85,78 @@ def save_results():
                 for result in results:
                     f.write(f"{result['port']},{result['status']},{result['service']}\n")
 
-
 # GUI Setup
 root = tk.Tk()
-root.title("Port Scanner")
+root.title("Advanced Port Scanner")
+root.geometry("800x500")
+
+# Main Frame
+main_frame = ttk.Frame(root, padding="10")
+main_frame.grid(row=0, column=0, sticky="nsew")
 
 # Input Fields
-tk.Label(root, text="Target IP:").grid(row=0, column=0)
-ip_entry = tk.Entry(root)
-ip_entry.grid(row=0, column=1)
+ttk.Label(main_frame, text="Target IP:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+ip_entry = ttk.Entry(main_frame, width=30)
+ip_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
 
-tk.Label(root, text="Start Port:").grid(row=1, column=0)
-start_port = tk.Entry(root)
-start_port.grid(row=1, column=1)
+ttk.Label(main_frame, text="Start Port:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+start_port = ttk.Entry(main_frame, width=10)
+start_port.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
-tk.Label(root, text="End Port:").grid(row=2, column=0)
-end_port = tk.Entry(root)
-end_port.grid(row=2, column=1)
+ttk.Label(main_frame, text="End Port:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+end_port = ttk.Entry(main_frame, width=10)
+end_port.grid(row=2, column=1, padx=5, pady=5, sticky="w")
 
-# Status Label
-status_label = tk.Label(root, text="", fg="blue")
-status_label.grid(row=6, columnspan=2)
+# Scan Type Selection (TCP/UDP)
+scan_mode = tk.StringVar(value="tcp")
+ttk.Label(main_frame, text="Scan Type:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+tcp_radio = ttk.Radiobutton(main_frame, text="TCP", variable=scan_mode, value="tcp")
+tcp_radio.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+udp_radio = ttk.Radiobutton(main_frame, text="UDP", variable=scan_mode, value="udp")
+udp_radio.grid(row=3, column=1, sticky="e", padx=5, pady=5)
 
+# Buttons
+button_frame = ttk.Frame(main_frame)
+button_frame.grid(row=4, column=0, columnspan=2, pady=10)
 
-# Start Scan Button
-scan_button = tk.Button(root, text="Start Scan", command=run_scan)
-scan_button.grid(row=3, column=0)
+scan_button = ttk.Button(button_frame, text="Start Scan", command=run_scan)
+scan_button.grid(row=0, column=0, padx=5)
 
-# Save Results Button
-save_button = tk.Button(root, text="Save Results", command=save_results)
-save_button.grid(row=3, column=1)
+stop_button = ttk.Button(button_frame, text="Stop Scan", command=stop_scan)
+stop_button.grid(row=0, column=1, padx=5)
+
+save_button = ttk.Button(button_frame, text="Save Results", command=save_results)
+save_button.grid(row=0, column=2, padx=5)
 
 # Progress Bar
-progress_bar = ttk.Progressbar(root, length=200, mode="determinate")
-progress_bar.grid(row=4, columnspan=2)
+progress_bar = ttk.Progressbar(main_frame, length=300, mode="determinate")
+progress_bar.grid(row=5, column=0, columnspan=2, pady=5)
+
+# Status Label
+status_label = ttk.Label(main_frame, text="", foreground="blue")
+status_label.grid(row=6, column=0, columnspan=2, pady=5)
 
 # Result Table
+result_frame = ttk.Frame(main_frame)
+result_frame.grid(row=7, column=0, columnspan=2, sticky="nsew")
+
 columns = ("Port", "Status", "Service")
-result_list = ttk.Treeview(root, columns=columns, show="headings")
+result_list = ttk.Treeview(result_frame, columns=columns, show="headings")
 result_list.heading("Port", text="Port")
 result_list.heading("Status", text="Status")
 result_list.heading("Service", text="Service")
-result_list.grid(row=5, columnspan=2)
 
+# Add tags for color-coding
+result_list.tag_configure("open", background="light green")
+result_list.tag_configure("closed", background="white")
+
+result_list.grid(row=0, column=0, sticky="nsew")
+
+# Scrollbar for result list
+scrollbar = ttk.Scrollbar(result_frame, orient="vertical", command=result_list.yview)
+scrollbar.grid(row=0, column=1, sticky="ns")
+result_list.configure(yscrollcommand=scrollbar.set)
+
+# Run GUI
 root.mainloop()
+
