@@ -19,10 +19,7 @@ def start_scan():
         messagebox.showerror("Error", "Invalid port numbers. Please enter valid integers.")
         return
     
-    # Clear previous results
     result_list.delete(*result_list.get_children())
-
-    # Run scan in a new thread to prevent UI freezing
     scan_thread = threading.Thread(target=scan_ports, args=(target_ip, port_range, update_progress))
     scan_thread.start()
 
