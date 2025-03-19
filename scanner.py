@@ -132,7 +132,7 @@ def shodan_lookup(ip):
 
 def detect_os(ttl):
     """Detect OS based on TTL value."""
-    
+
     if ttl > 128:
         return "Cisco Device (TTL > 128)"
     elif 113 < ttl <= 128:
@@ -143,24 +143,6 @@ def detect_os(ttl):
         return "BSD/MacOS (TTL < 64)"
     else:
         return "Unknown"
-
-
-
-# def get_ttl(target_ip):
-#     """Get the TTL value from an ICMP ping."""
-#     try:
-#         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-#         sock.settimeout(1)
-#         sock.sendto(b'\x08\x00\x00\x00\x00\x00\x00\x00', (target_ip, 1))
-
-#         response, _ = sock.recvfrom(1024)
-#         ttl = struct.unpack("B", response[8:9])[0]
-#         sock.close()
-
-#         return ttl
-
-#     except Exception:
-#         return None
 
 
 def get_ttl(target_ip):

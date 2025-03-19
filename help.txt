@@ -1,0 +1,42 @@
+
+# -------------------------------------
+# ------------How to test--------------
+# 
+# For the OS test only enter the IP:
+# 
+# Target IP: 8.8.8.8 (Google DNS server):
+# Detected OS: Linux/Unix (TTL=64)
+# 
+# For 192.168.1.1 (local router):
+# Detected OS: Windows (TTL=128)
+# 
+# -----------------------------------------------------------------------------------
+# 
+# For Shodan Lookup: Enter a public IP address (e.g., 8.8.8.8) in the "Target IP" field:
+# 
+# IP: 8.8.8.8
+# Organization: Google LLC
+# ISP: Google LLC
+# OS: Unknown
+# Open Ports: 53
+# Vulnerabilities: None
+# 
+# ------------------------------------------------------------------------------------
+
+
+# -----------------------------------------
+# To check and left with no error
+
+# def is_admin():
+#     """Check if the script is running with administrative privileges."""
+#     try:
+#         if platform.system() == "Windows":
+#             return ctypes.windll.shell32.IsUserAnAdmin()
+#         else:
+#             return os.geteuid() == 0
+#     except:
+#         return False
+
+# ----------------------------------------------
+
+
