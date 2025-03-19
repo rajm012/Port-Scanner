@@ -1,0 +1,7 @@
+socket
+threading
+tkinter
+csv
+json
+colorama
+
