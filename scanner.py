@@ -4,6 +4,7 @@ import concurrent.futures
 import os
 import shodan
 import struct
+import time
 
 
 SHODAN_API_KEY="S0EA8Co1efoOunYbc1EIPOuZDZCo45Cx"
@@ -129,31 +130,77 @@ def shodan_lookup(ip):
         return {"Error": f"Shodan API Error: {e}"}
 
 
-
 def detect_os(ttl):
     """Detect OS based on TTL value."""
+    
     if ttl > 128:
-        return "Windows"
-    elif 64 < ttl <= 128:
-        return "Linux/Unix"
-    elif ttl <= 64:
-        return "BSD/MacOS"
-    return "Unknown"
+        return "Cisco Device (TTL > 128)"
+    elif 113 < ttl <= 128:
+        return "Windows (TTL ~128)"
+    elif 64 <= ttl <= 113:
+        return "Linux/Unix (TTL ~64)"
+    elif ttl < 64:
+        return "BSD/MacOS (TTL < 64)"
+    else:
+        return "Unknown"
 
+
+
+# def get_ttl(target_ip):
+#     """Get the TTL value from an ICMP ping."""
+#     try:
+#         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+#         sock.settimeout(1)
+#         sock.sendto(b'\x08\x00\x00\x00\x00\x00\x00\x00', (target_ip, 1))
+
+#         response, _ = sock.recvfrom(1024)
+#         ttl = struct.unpack("B", response[8:9])[0]
+#         sock.close()
+
+#         return ttl
+
+#     except Exception:
+#         return None
 
 
 def get_ttl(target_ip):
     """Get the TTL value from an ICMP ping."""
     try:
+        # Create a raw socket for ICMP
         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-        sock.settimeout(1)
-        sock.sendto(b'\x08\x00\x00\x00\x00\x00\x00\x00', (target_ip, 1))
+        sock.settimeout(3)
 
-        response, _ = sock.recvfrom(1024)
-        ttl = struct.unpack("B", response[8:9])[0]
+        # ICMP Echo Request (Type 8, Code 0)
+        # Header: type (8), code (0), checksum (0), id (process ID), sequence (1)
+        icmp_header = struct.pack("!BBHHH", 8, 0, 0, os.getpid() & 0xFFFF, 1)
+
+        # Calculate checksum
+        checksum = 0
+        for i in range(0, len(icmp_header), 2):
+            checksum += (icmp_header[i] << 8) + icmp_header[i + 1]
+        checksum = (checksum >> 16) + (checksum & 0xFFFF)
+        checksum = ~checksum & 0xFFFF
+
+        # Repack the header with the correct checksum
+        icmp_header = struct.pack("!BBHHH", 8, 0, checksum, os.getpid() & 0xFFFF, 1)
+
+        # Send the ICMP packet
+        sock.sendto(icmp_header, (target_ip, 1))
+
+        # Wait for the response
+        start_time = time.time()
+        while time.time() - start_time < 2:  # Wait for up to 2 seconds
+            try:
+                response, _ = sock.recvfrom(1024)
+                ttl = struct.unpack("!B", response[8:9])[0]  # Extract TTL from the IP header
+                sock.close()
+                return ttl
+            except socket.timeout:
+                continue
+
         sock.close()
-
-        return ttl
-
-    except Exception:
+        return None
+    
+    except Exception as e:
+        print(f"Error in get_ttl: {e}")
         return None

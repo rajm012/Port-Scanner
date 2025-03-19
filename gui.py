@@ -6,15 +6,59 @@ from scanner import scan_ports, shodan_lookup, get_ttl, detect_os
 import os
 import ctypes
 import sys
+import platform
 
-SHODAN_API_KEY="S0EA8Co1efoOunYbc1EIPOuZDZCo45Cx"
-
+SHODAN_API_KEY = os.getenv("SHODAN_API_KEY", "S0EA8Co1efoOunYbc1EIPOuZDZCo45Cx")
 
 # Global variable to control scanning
 scanning = False
 scanning_lock = threading.Lock()
 
 
+# -----------------------------------------
+# To check and left with no error
+
+# def is_admin():
+#     """Check if the script is running with administrative privileges."""
+#     try:
+#         if platform.system() == "Windows":
+#             return ctypes.windll.shell32.IsUserAnAdmin()
+#         else:
+#             return os.geteuid() == 0
+#     except:
+#         return False
+
+# ----------------------------------------------
+# To check and try to get admin permission
+
+
+def is_admin():
+    """Check if the script is running with administrative privileges."""
+    try:
+        if platform.system() == "Windows":
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        else:
+            return os.geteuid() == 0
+    except:
+        return False
+
+if not is_admin():
+    print("This script requires administrative privileges.")
+    script_path = os.path.abspath(sys.argv[0])  # Get the absolute path of the script
+    if platform.system() == "Windows":
+        # Re-run the script with admin rights on Windows
+        import ctypes
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{script_path}"', None, 1)
+    else:
+        # Re-run the script with sudo on Linux/macOS
+        os.execvp("sudo", ["sudo", "python3", script_path] + sys.argv[1:])
+    sys.exit()
+
+# Your script logic here
+print("Running with administrative privileges!")
+
+ 
 def stop_scan():
     global scanning
     with scanning_lock:
@@ -30,7 +74,9 @@ def update_progress(value):
 # Function to run the scan
 def run_scan():
     global scanning
-    scanning = True
+    with scanning_lock:
+        scanning = True
+
     target_ip = ip_entry.get().strip()
     start = int(start_port.get())
     end = int(end_port.get())
@@ -118,19 +164,22 @@ def run_shodan_lookup():
         messagebox.showerror("Error", "Please enter a target IP address.")
         return
 
-    result = shodan_lookup(target_ip)
+    try:
+        result = shodan_lookup(target_ip)
 
+        if "Error" in result:
+            messagebox.showerror("Shodan Error", result["Error"])
 
-    if "Error" in result:
-        messagebox.showerror("Shodan Error", result["Error"])
+        else:
+            info_text = f"IP: {result['IP']}\nOrganization: {result['Organization']}\n"
+            info_text += f"ISP: {result['ISP']}\nOS: {result['OS']}\n"
+            info_text += f"Open Ports: {', '.join(map(str, result['Open Ports']))}\n"
+            info_text += f"Vulnerabilities: {result['Vulnerabilities']}\n"
+            
+            messagebox.showinfo("Shodan Lookup", info_text)
 
-    else:
-        info_text = f"IP: {result['IP']}\nOrganization: {result['Organization']}\n"
-        info_text += f"ISP: {result['ISP']}\nOS: {result['OS']}\n"
-        info_text += f"Open Ports: {', '.join(map(str, result['Open Ports']))}\n"
-        info_text += f"Vulnerabilities: {result['Vulnerabilities']}\n"
-        
-        messagebox.showinfo("Shodan Lookup", info_text)
+    except Exception as e:
+        messagebox.showerror("Error", f"An error occurred during Shodan lookup: {str(e)}")
 
 
 def run_os_detection():
@@ -139,10 +188,14 @@ def run_os_detection():
         messagebox.showerror("Error", "Please enter a target IP address.")
         return
 
+    if not is_admin():
+        messagebox.showerror("Error", "Administrative privileges required for OS detection.")
+        return
+
     try:
         ttl = get_ttl(target_ip)
         if ttl is None:
-            messagebox.showwarning("OS Detection", "Could not determine OS. Ensure you have administrative privileges.")
+            messagebox.showwarning("OS Detection", "Could not determine OS. Ensure the target IP is reachable.")
             return
 
         os_guess = detect_os(ttl)
@@ -195,6 +248,15 @@ stop_button.grid(row=0, column=1, padx=5)
 save_button = ttk.Button(button_frame, text="Save Results", command=save_results)
 save_button.grid(row=0, column=2, padx=5)
 
+
+# Shodan lookup
+shodan_button = ttk.Button(button_frame, text="Shodan Lookup", command=run_shodan_lookup)
+shodan_button.grid(row=0, column=3, padx=5)
+
+# OS detection button
+os_button = ttk.Button(button_frame, text="Detect OS", command=run_os_detection)
+os_button.grid(row=0, column=4, padx=5)
+
 # Progress Bar
 progress_bar = ttk.Progressbar(main_frame, length=300, mode="determinate")
 progress_bar.grid(row=5, column=0, columnspan=2, pady=5)
@@ -226,22 +288,13 @@ scrollbar = ttk.Scrollbar(result_frame, orient="vertical", command=result_list.y
 scrollbar.grid(row=0, column=1, sticky="ns")
 result_list.configure(yscrollcommand=scrollbar.set)
 
-
-# Add a button for Shodan lookup
-shodan_button = ttk.Button(button_frame, text="Shodan Lookup", command=run_shodan_lookup)
-shodan_button.grid(row=0, column=3, padx=5)
-
-# Add OS detection button
-os_button = ttk.Button(button_frame, text="Detect OS", command=run_os_detection)
-os_button.grid(row=0, column=4, padx=5)
-
-
+# UDP Note
 udp_note = ttk.Label(main_frame, text="Note: UDP scanning may be unreliable due to the nature of the protocol.", foreground="gray")
-udp_note.grid(row=9, column=0, columnspan=2, pady=5)
+udp_note.grid(row=9, column=0, columnspan=2, pady=5, sticky="w")
+
 
 # Run GUI
 root.mainloop()
-
 
 
 # -------------------------------------
@@ -267,3 +320,4 @@ root.mainloop()
 # Vulnerabilities: None
 # 
 # ------------------------------------------------------------------------------------
+
