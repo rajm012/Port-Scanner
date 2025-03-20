@@ -7,7 +7,7 @@ import struct
 import time
 
 
-SHODAN_API_KEY="S0EA8Co1efoOunYbc1EIPOuZDZCo45Cx"
+SHODAN_API_KEY="enter-own-api-key"
 
 # Common services mapping
 COMMON_SERVICES = {

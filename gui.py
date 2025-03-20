@@ -20,7 +20,7 @@ TAG_CLOSED = "closed"
 TAG_FILTERED = "filtered"
 TAG_ERROR = "error"
 
-SHODAN_API_KEY = os.getenv("SHODAN_API_KEY", "S0EA8Co1efoOunYbc1EIPOuZDZCo45Cx")
+SHODAN_API_KEY = os.getenv("SHODAN_API_KEY")
 
 # Global variable to control scanning
 scanning = False

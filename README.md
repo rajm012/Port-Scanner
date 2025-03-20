@@ -1,3 +1,4 @@
+
 # 🔍 Basic GUI-Based Port Scanner
 
 A powerful, multi-threaded **GUI-based Port Scanner** built using Python and Tkinter. This tool enables fast and efficient scanning of network ports, service detection, OS detection, and Shodan lookups.
@@ -108,6 +109,71 @@ For issues or suggestions, reach out via:
 
 - **GitHub Issues**
 - **Email:** syntaxajju@gmail.com
+
+---
+
+## 🛠️ Generating the Executable
+
+The final executable (`gui.exe`) is **90 MB** in size, which exceeds GitHub's file size limit of **25 MB**. To work around this, the executable has been split into smaller parts. Follow the steps below to rejoin the parts and generate the `.exe` file.
+
+### Steps to Rejoin the Executable
+1. Download all the split parts (e.g., `gui.exe.part1`, `gui.exe.part2`, etc.).
+2. Use the following command to rejoin the parts:
+
+   ```sh
+   copy /b gui.exe.part1 + gui.exe.part2 + gui.exe.part3 gui.exe
+   ```
+
+   Replace `gui.exe.part1`, `gui.exe.part2`, etc., with the actual filenames of the split parts.
+
+3. Once rejoined, you will have the complete `gui.exe` file.
+
+OR
+
+Use the script given in the `Split-Reassemble` file to rejoin the parts.
+
+---
+
+### If Rejoining Doesn't Work: Generate Your Own Executable
+If the rejoined executable doesn't work or you prefer to generate your own, follow these steps:
+
+1. Install **PyInstaller**:
+
+   ```sh
+   pip install pyinstaller
+   ```
+
+2. Navigate to the project directory:
+
+   ```sh
+   cd path\to\Port-Scanner
+   ```
+
+3. Generate the executable:
+
+   ```sh
+   pyinstaller --onefile --windowed main.py
+   ```
+
+   This will create a standalone executable in the `dist` folder.
+
+4. Run the executable:
+
+   ```sh
+   dist\main.exe
+   ```
+
+---
+
+## 🗑️ Cleaning Up After Build
+After generating the executable, you can delete the following files/folders to save space:
+- `build/` folder
+- `main.spec` file
+- Any intermediate files like `PYZ-00.pyz` or `main.pkg`
+
+Keep only the `dist/main.exe` file for distribution.
+
+---
 
 Happy Scanning! 🚀🔍
 
