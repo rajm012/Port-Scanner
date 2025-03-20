@@ -189,3 +189,50 @@
 # -----------------------------------------
 
 
+
+
+# ----------Previous version SYN lookup-------
+
+# def syn_scan_gui(target_ip, port_range):
+#     """Handle SYN scan updates."""
+#     global scanning
+#     num_ports = len(port_range)
+#     progress_step = 100 / num_ports if num_ports > 0 else 100
+#     progress = 0
+
+#     for port in port_range:
+#         if not scanning:
+#             break
+
+#         # Craft SYN packet
+#         syn_packet = IP(dst=target_ip) / TCP(dport=port, flags="S")
+
+#         # Send SYN and receive response
+#         response = sr1(syn_packet, timeout=2, verbose=False)
+
+#         if response:
+#             if response.haslayer(TCP) and response[TCP].flags == 0x12:
+#                 status = STATUS_OPEN
+#                 tag = TAG_OPEN
+#             elif response.haslayer(TCP) and response[TCP].flags == 0x14:
+#                 status = STATUS_CLOSED
+#                 tag = TAG_CLOSED
+#             else:
+#                 status = STATUS_FILTERED
+#                 tag = TAG_FILTERED
+#         else:
+#             status = "No Response (Filtered)"
+#             tag = TAG_FILTERED
+
+#         result_list.insert("", "end", values=(port, status, ""), tags=(tag,))
+#         progress += progress_step
+#         update_progress(progress)
+
+#     # Ensure full progress when done
+#     with scanning_lock:
+#         if scanning:
+#             progress_bar["value"] = 100
+#             status_label.config(text=f"SYN scan completed for {target_ip}")
+    
+#         scanning = False
+

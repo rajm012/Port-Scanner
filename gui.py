@@ -8,6 +8,7 @@ import os
 import ctypes
 import sys
 import platform
+import socket, struct, requests
 
 # Constants for repeated strings
 STATUS_OPEN = "Open"
@@ -99,10 +100,11 @@ def run_scan():
 
     # Start scanning in a separate thread
     if scan_type == "syn":
-        scan_thread = threading.Thread(target=syn_scan_gui, args=(target_ip, port_range))
+        scan_thread = threading.Thread(target=syn_scan, args=(target_ip, port_range))
 
     else:
         scan_thread = threading.Thread(target=scan_ports_gui, args=(target_ip, port_range, scan_type))
+
     scan_thread.start()
 
 
@@ -140,49 +142,106 @@ def scan_ports_gui(target_ip, port_range, scan_type):
         scanning = False
 
 
-def syn_scan_gui(target_ip, port_range):
-    """Handle SYN scan updates."""
+def syn_scan(target_ip, port_range):
+    """Perform a SYN scan on a range of ports."""
     global scanning
     num_ports = len(port_range)
     progress_step = 100 / num_ports if num_ports > 0 else 100
     progress = 0
 
+    def thread_callback(port, status, service):
+        nonlocal progress
+        if not scanning:
+            return
+        
+        tag = TAG_OPEN if status == STATUS_OPEN else TAG_CLOSED
+
+        if STATUS_ERROR in status or STATUS_FILTERED in status:
+            tag = TAG_ERROR if STATUS_ERROR in status else TAG_FILTERED
+
+        result_list.insert("", "end", values=(port, status, service), tags=(tag,))
+        progress += progress_step
+        
+        update_progress(progress)
+
     for port in port_range:
         if not scanning:
             break
 
-        # Craft SYN packet
-        syn_packet = IP(dst=target_ip) / TCP(dport=port, flags="S")
+        try:
+            # Create a raw socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+            sock.settimeout(1)
 
-        # Send SYN and receive response
-        response = sr1(syn_packet, timeout=2, verbose=False)
+            # Craft a TCP SYN packet
+            source_port = 12345  # Random source port
+            seq_number = 0
+            ack_number = 0
+            tcp_header = struct.pack(
+                "!HHLLBBHHH",
+                source_port, port, seq_number, ack_number, 5 << 4, 0x02, 1024, 0, 0
+            )
 
-        if response:
-            if response.haslayer(TCP) and response[TCP].flags == 0x12:
+            # Send the SYN packet
+            sock.sendto(tcp_header, (target_ip, port))
+
+            # Receive the response
+            response, _ = sock.recvfrom(1024)
+            sock.close()
+
+            # Analyze the response
+            if response[33] == 0x12:  # SYN-ACK flag
                 status = STATUS_OPEN
-                tag = TAG_OPEN
-            elif response.haslayer(TCP) and response[TCP].flags == 0x14:
+            elif response[33] == 0x14:  # RST flag
                 status = STATUS_CLOSED
-                tag = TAG_CLOSED
             else:
                 status = STATUS_FILTERED
-                tag = TAG_FILTERED
-        else:
-            status = "No Response (Filtered)"
-            tag = TAG_FILTERED
 
-        result_list.insert("", "end", values=(port, status, ""), tags=(tag,))
-        progress += progress_step
-        update_progress(progress)
+            thread_callback(port, status, "N/A")
+
+        except socket.timeout:
+            thread_callback(port, STATUS_FILTERED, "N/A")
+        except Exception as e:
+            thread_callback(port, STATUS_ERROR, str(e))
 
     # Ensure full progress when done
     with scanning_lock:
         if scanning:
             progress_bar["value"] = 100
             status_label.config(text=f"SYN scan completed for {target_ip}")
-    
         scanning = False
 
+
+def run_geoip_lookup():
+    target_ip = ip_entry.get().strip()
+    if not target_ip:
+        messagebox.showerror("Error", "Please enter a target IP address.")
+        return
+
+    result = geoip_lookup(target_ip)
+    if "Error" in result:
+        messagebox.showerror("GeoIP Error", result["Error"])
+    else:
+        info_text = f"IP: {result['IP']}\nCity: {result['City']}\n"
+        info_text += f"Region: {result['Region']}\nCountry: {result['Country']}\n"
+        info_text += f"ISP: {result['ISP']}\n"
+        messagebox.showinfo("GeoIP Lookup", info_text)
+
+
+def geoip_lookup(ip):
+    try:
+        response = requests.get(f"http://ipinfo.io/{ip}/json")
+        data = response.json()
+        return {
+            "IP": data.get("ip"),
+            "City": data.get("city"),
+            "Region": data.get("region"),
+            "Country": data.get("country"),
+            "ISP": data.get("org"),
+        }
+    except Exception as e:
+        return {"Error": str(e)}
+    
 
 def save_results():
     """Save scan results to a file."""
@@ -285,12 +344,20 @@ end_port.grid(row=2, column=1, padx=5, pady=5, sticky="w")
 # Scan Type Selection (TCP/UDP/SYN)
 scan_mode = tk.StringVar(value="tcp")
 ttk.Label(main_frame, text="Scan Type:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
-tcp_radio = ttk.Radiobutton(main_frame, text="TCP", variable=scan_mode, value="tcp")
-tcp_radio.grid(row=3, column=1, sticky="w", padx=5, pady=5)
-udp_radio = ttk.Radiobutton(main_frame, text="UDP", variable=scan_mode, value="udp")
-udp_radio.grid(row=3, column=1, sticky="e", padx=5, pady=5)
-syn_radio = ttk.Radiobutton(main_frame, text="SYN", variable=scan_mode, value="syn")
-syn_radio.grid(row=3, column=2, sticky="w", padx=5, pady=5)
+
+# Frame to hold radio buttons for better alignment
+scan_frame = ttk.Frame(main_frame)
+scan_frame.grid(row=3, column=1, columnspan=3, padx=5, pady=5, sticky="w")
+
+tcp_radio = ttk.Radiobutton(scan_frame, text="TCP", variable=scan_mode, value="tcp")
+tcp_radio.pack(side="left", padx=5)
+
+udp_radio = ttk.Radiobutton(scan_frame, text="UDP", variable=scan_mode, value="udp")
+udp_radio.pack(side="left", padx=5)
+
+syn_radio = ttk.Radiobutton(scan_frame, text="SYN", variable=scan_mode, value="syn")
+syn_radio.pack(side="left", padx=5)
+
 
 # Tooltips
 tooltip = ttk.Label(main_frame, text="SYN scan requires admin privileges.", foreground="gray")
@@ -318,7 +385,12 @@ shodan_button.grid(row=0, column=4, padx=5)
 
 # OS detection button
 os_button = ttk.Button(button_frame, text="Detect OS", command=run_os_detection)
-os_button.grid(row=0, column=5, padx=5)
+os_button.grid(row=0, column=6, padx=5)
+
+# Add GeoIP Lookup button
+geoip_button = ttk.Button(button_frame, text="GeoIP Lookup", command=run_geoip_lookup)
+geoip_button.grid(row=0, column=5, padx=5)
+
 
 # Progress Bar
 progress_bar = ttk.Progressbar(main_frame, length=300, mode="determinate")
